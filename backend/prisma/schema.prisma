@@ -1,0 +1,169 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  owner       String?
+  status      String   @default("active") // active, inactive, deprecated
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  sourceDependencies Dependency[] @relation("SourceService")
+  targetDependencies Dependency[] @relation("TargetService")
+  metrics            Metric[]
+  incidents          Incident[]
+  scores             Score[]
+  recommendations    Recommendation[]
+
+  @@map("services")
+}
+
+model Dependency {
+  id                String   @id @default(cuid())
+  sourceServiceId   String
+  targetServiceId   String
+  dependencyType    String   @default("api") // api, database, queue, cache, external
+  isRequired        Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relationships
+  sourceService Service @relation("SourceService", fields: [sourceServiceId], references: [id], onDelete: Cascade)
+  targetService Service @relation("TargetService", fields: [targetServiceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceServiceId, targetServiceId])
+  @@map("dependencies")
+}
+
+model Metric {
+  id        String   @id @default(cuid())
+  serviceId String
+  uptime    Float    // Percentage (0-100)
+  latencyP95 Float   // Milliseconds
+  latencyP99 Float   // Milliseconds
+  errorRate Float    // Percentage (0-100)
+  throughput Float   // Requests per second
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  // Relationships
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId, timestamp])
+  @@map("metrics")
+}
+
+model Incident {
+  id          String   @id @default(cuid())
+  serviceId   String
+  severity    String   // critical, high, medium, low
+  category    String   // network, infrastructure, application, configuration
+  title       String
+  description String
+  status      String   @default("open") // open, investigating, resolved, closed
+  startTime   DateTime
+  endTime     DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId, startTime])
+  @@index([category, severity])
+  @@map("incidents")
+}
+
+model Score {
+  id                     String   @id @default(cuid())
+  serviceId              String
+  overallScore           Float    // 0-100
+  availabilityScore      Float    // 0-100
+  incidentScore          Float    // 0-100
+  redundancyScore        Float    // 0-100
+  dependencyScore        Float    // 0-100
+  configurationVersion   String   @default("default")
+  computedAt             DateTime @default(now())
+
+  // Relationships
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId, computedAt])
+  @@map("scores")
+}
+
+model Recommendation {
+  id          String   @id @default(cuid())
+  serviceId   String
+  category    String   // infrastructure, architecture, monitoring, process
+  severity    String   // high, medium, low
+  title       String
+  description String
+  actionable  String   // Specific action to take
+  priority    Int      @default(1) // 1-5 scale
+  status      String   @default("open") // open, in-progress, completed, dismissed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId, severity])
+  @@index([category, priority])
+  @@map("recommendations")
+}
+
+model Configuration {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   // JSON string
+  category  String   // scoring, slo, rules
+  version   String   @default("1.0")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("configurations")
+}
+
+model AlertRule {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  condition   String   // JSON expression for rule evaluation
+  severity    String   // critical, warning, info
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("alert_rules")
+}
+
+model Connector {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // splunk, dynatrace, appdynamics, datadog, newrelic
+  enabled   Boolean  @default(false)
+  config    String   // JSON string with connector-specific configuration
+  lastTest  DateTime?
+  testStatus String? // success, failed, pending
+  testMessage String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([type])
+  @@map("connectors")
+}

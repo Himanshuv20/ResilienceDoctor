@@ -1,0 +1,6 @@
+{
+  "extends": ["@vitejs/eslint-config-react", "@vitejs/eslint-config-typescript"],
+  "rules": {
+    "react-refresh/only-export-components": "warn"
+  }
+}
